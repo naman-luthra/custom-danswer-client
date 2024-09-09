@@ -2,6 +2,7 @@ import React, { useState, useEffect, use } from 'react';
 import { createChatSession, getFastApiAuthToken, SendMessageResponse, simpleSendMessage } from '../../utils/danswer/chatApi';
 import { GiBrain } from "react-icons/gi";
 import Markdown from 'react-markdown';
+import { CodeBlock } from '@/components/danswer/code-block';
 
 interface ContextDoc {
   link: string;
@@ -214,7 +215,16 @@ const Chat: React.FC = () => {
               }
               <div>
                 <div className={`p-2 rounded-lg ${msg.sender === 'user' ? 'bg-gray-100 text-black' : 'bg-gray-100 text-black'}`}>
-                  <Markdown>
+                  <Markdown
+                    components={{
+                      // code: (props) => (
+                      //   <CodeBlock
+                      //     {...props}
+                      //     content={msg.content}
+                      //   />
+                      // )
+                    }}
+                  >
                     {msg.content}
                   </Markdown>
                 </div>
