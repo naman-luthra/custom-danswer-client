@@ -1,5 +1,5 @@
 import React, { useState, useEffect, use } from 'react';
-import { createChatSession, SendMessageResponse, simpleSendMessage } from '../../utils/danswer/chatApi';
+import { createChatSession, getFastApiAuthToken, SendMessageResponse, simpleSendMessage } from '../../utils/danswer/chatApi';
 import { GiBrain } from "react-icons/gi";
 import Markdown from 'react-markdown';
 
@@ -20,6 +20,7 @@ interface Message {
 const Chat: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [chatSessionId, setChatSessionId] = useState<string | null>(null);
+  const [fastApiUsersAuth, setFastApiUsersAuth] = useState<string | null>(null);
   const [input, setInput] = useState('');
 
   // Stores ongoing responses
@@ -39,12 +40,15 @@ const Chat: React.FC = () => {
 
   // Creation of the chat session
   useEffect(() => {
-    createChatSession(1)
+    getFastApiAuthToken(false).then(fastApiUsersAuth => {
+      setFastApiUsersAuth(fastApiUsersAuth);
+      createChatSession(1, fastApiUsersAuth)
       .then(sessionId => {
         setChatSessionId(sessionId);
         console.log('Chat session created with ID:', sessionId);
       })
       .catch(error => console.error('Failed to create chat session:', error));
+    })
   }, []);
 
   // Send message handler
@@ -68,7 +72,8 @@ const Chat: React.FC = () => {
       message: input,
       prompt_id: 5,
       temperature: 0.5,
-      parent_message_id: lastBotMessageId
+      parent_message_id: lastBotMessageId,
+      fastapiusersauth: fastApiUsersAuth
     }, onData, onEnd, onError);
 
     setInput(''); // Clear input field
@@ -155,9 +160,11 @@ const Chat: React.FC = () => {
     setInput(event.target.value);
   };
 
-  // Key press handler
+  // Give answer on Cmd + Enter
   const handleKeyPress = (event: React.KeyboardEvent) => {
-    if (event.key === 'Enter') handleSendMessage();
+    if (event.key === 'Enter' && event.metaKey) {
+      handleSendMessage();
+    }
   };
 
   useEffect(() => {
@@ -193,8 +200,8 @@ const Chat: React.FC = () => {
   }, [messages, accumulatedResponse]);
 
   return (
-    <div className="flex flex-col h-screen py-12 mx-auto">
-      <div ref={scrollDivRef} className="flex-grow overflow-y-auto p-4 px-[20%] space-y-6">
+    <div className="flex flex-col h-screen py-12 mx-auto justify-center">
+      <div ref={scrollDivRef} className={`flex-grow overflow-y-auto p-4 px-[20%] space-y-6 ${messages.length===0 ? 'hidden' : ''}`}>
         {messages.map((msg, index) => (
           <div key={index} className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
             <div className='flex gap-2 max-w-[60%]'>
@@ -206,14 +213,14 @@ const Chat: React.FC = () => {
                 )
               }
               <div>
-                <div className={`p-2 rounded-lg ${msg.sender === 'user' ? 'bg-gray-100 text-black' : ''}`}>
+                <div className={`p-2 rounded-lg ${msg.sender === 'user' ? 'bg-gray-100 text-black' : 'bg-gray-100 text-black'}`}>
                   <Markdown>
                     {msg.content}
                   </Markdown>
                 </div>
                 {
                   msg.contextDocs.length > 0 && (
-                    <div className="flex gap-4 overflow-x-scroll">
+                    <div className="flex gap-4 overflow-x-scroll max-w-[60vw]">
                       {msg.contextDocs.map((doc, index) => (
                         <a key={index} href={doc.link} target="_blank" rel="noreferrer" className="p-2 bg-gray-50 rounded-lg shadow-md my-2 max-w-[36%]">
                           <div className="text-blue-500 text-sm">
@@ -223,8 +230,9 @@ const Chat: React.FC = () => {
                           <div className="text-ellipsis overflow-hidden text-xs">{doc.link}</div>
                           {
                             doc.matchHighlights.length > 0 &&
-                              <div key={index} className="text-xs text-gray-500">{doc.matchHighlights.join("...").slice(0, 128)}...</div>
+                              <div key={index} className="text-xs text-gray-500 mt-1">{doc.matchHighlights.join("...").slice(0, 128)}...</div>
                           }
+                          <div className='text-xs mt-2'>Score: {doc.score.toPrecision(2)}</div>
                         </a>
                       ))}
                     </div>
@@ -234,14 +242,6 @@ const Chat: React.FC = () => {
             </div>
           </div>
         ))}
-        {
-          messages.length === 0 && (
-            <div className="flex flex-col gap-4 h-full w-full items-center justify-center text-xl">
-                <GiBrain className='text-4xl'/>
-                <div>Welcome to the chat! Ask me anything.</div>
-            </div>
-          )
-        }
         {accumulatedResponse.responding && (
           <div className='flex justify-start'>
             <div className='flex gap-2 max-w-[60%]'>
@@ -249,7 +249,7 @@ const Chat: React.FC = () => {
                 <GiBrain className='w-8 h-8'/>
               </div>
               <div>
-                <div className={`p-2 rounded-lg`}>
+                <div className={`p-2 rounded-lg bg-gray-100 text-black`}>
                   { accumulatedResponse.content ? <Markdown>{accumulatedResponse.content}</Markdown> : "Thinking..."}
                 </div>
               </div>
@@ -262,13 +262,13 @@ const Chat: React.FC = () => {
           type="text"
           value={input}
           onChange={handleInputChange}
-          onKeyPress={handleKeyPress}
+          onKeyDown={handleKeyPress}
           placeholder="Type your message here..."
           className="flex-grow border-2 border-gray-300 p-2 rounded-lg focus:outline-none focus:border-blue-500"
         />
         <button
           onClick={handleSendMessage}
-          className="ml-4 px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 focus:outline-none"
+          className="ml-4 px-6 py-2 bg-gray-500 text-white rounded-lg hover:bg-blue-600 focus:outline-none"
         >
           Send
         </button>

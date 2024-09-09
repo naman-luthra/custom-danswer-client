@@ -36,3 +36,7 @@ yarn-error.log*
 next-env.d.ts
 
 .env
+/forward-server/.env
+/forward-server/node_modules
+/forward-server/out
+/forward-server/package-lock.json

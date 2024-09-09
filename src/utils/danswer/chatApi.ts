@@ -1,6 +1,5 @@
 // chatApi.ts in the /utils or /lib directory
 
-import http from 'http';
 import { PacketType } from './interfaces';
 import { handleSSEStream } from './streamingUtils';
 
@@ -43,6 +42,7 @@ interface SendMessageParams {
     prompt_id: number;
     temperature: number;
     parent_message_id: string | null;
+    fastapiusersauth: string | null;
 }
 
 export interface SendMessageResponse {
@@ -54,23 +54,21 @@ export interface SendMessageResponse {
     citations?: Object;
 }
 
-// Functions can be exported so they can be imported elsewhere in your Next.js project
-export function createChatSession(persona_id: number, description: string | null = null): Promise<string> {
-    console.log('Creating chat session...', process.env.NEXT_PUBLIC_DANSWER_URL);
-    const url = `${process.env.NEXT_PUBLIC_DANSWER_URL}/api/chat/create-chat-session`; // Use environment variable for API URL
-    console.log('URL:', url);
+export function createChatSession(persona_id: number, fastapiusersauth: string | null, description: string | null = null): Promise<string> {
+    const forwardServerUrl = process.env.NEXT_PUBLIC_FORWARD_SERVER_URL;
     const requestBody = {
         persona_id,
-        description
+        description,
+        fastapiusersauth
     };
 
     return new Promise<string>((resolve, reject) => {
-        fetch(url, {
+        fetch(`${forwardServerUrl}/api/chat/create-chat-session`, {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
             },
-            body: JSON.stringify(requestBody)
+            body: JSON.stringify(requestBody),
         })
         .then(response => {
             if (!response.ok) {
@@ -127,7 +125,7 @@ export async function* sendMessage(
     signal: AbortSignal
 ): AsyncGenerator<PacketType, void, unknown> {
 
-    const postData = JSON.stringify({
+    const reqData = {
         alternate_assistant_id: 1,
         chat_session_id: paramObj.chat_session_id,
         message: paramObj.message,
@@ -147,24 +145,24 @@ export async function* sendMessage(
             }
         },
         prompt_override: null,
-        llm_override: {
-            model_provider: "Personal Key",
-            model_version: "gpt-4o"
-        },
+        llm_override: null,
         temperature: paramObj.temperature
+    }
+
+    const postData = JSON.stringify({
+        postData: reqData,
+        fastapiusersauth: paramObj.fastapiusersauth
     });
 
-    const danswerUrl = process.env.NEXT_PUBLIC_DANSWER_URL;
+    const forwardServerUrl = process.env.NEXT_PUBLIC_FORWARD_SERVER_URL;
 
-    console.log('Sending message to:', danswerUrl);
-
-    const response = await fetch(`${danswerUrl}/api/chat/send-message`, {
+    const response = await fetch(`${forwardServerUrl}/api/chat/send-message`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: postData,
-        signal,
+        signal
       });
     
       if (!response.ok) {
@@ -172,4 +170,25 @@ export async function* sendMessage(
       }
     
     yield* handleSSEStream<PacketType>(response);
+}
+
+export async function getFastApiAuthToken(isAuthEnabled: boolean): Promise<string | null> {
+    if (!isAuthEnabled) {
+        return null;
+    }
+    const forwardServerUrl = process.env.NEXT_PUBLIC_FORWARD_SERVER_URL;
+
+    try {
+        const response = await fetch(`${forwardServerUrl}/api/get-auth-token`).then(data => data.json());
+        const token = response.token;
+
+        if (!token) {
+            throw new Error('Failed to fetch the auth token');
+        }
+
+        return token;
+    } catch (error) {
+        console.error('Error fetching auth token:', error);
+        return null;
+    }
 }
